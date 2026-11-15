@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "compile": "bun run bin/cli.ts compile",
-    "test": "bun test"
+    "test": "bun test",
+    "benchmark": "bun run scripts/benchmark.ts"
   },
   "keywords": [
     "n8n",

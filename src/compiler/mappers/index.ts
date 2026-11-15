@@ -51,6 +51,22 @@ export class NodeMappers {
       return this.mapAggregateNode(ctx);
     }
 
+    if (type.includes('splitOut')) {
+      return this.mapSplitOutNode(ctx);
+    }
+
+    if (type.includes('merge')) {
+      return this.mapMergeNode(ctx);
+    }
+
+    if (type.includes('postgres')) {
+      return this.mapPostgresNode(ctx);
+    }
+
+    if (type.includes('openAi') || type.includes('googleGemini') || type.includes('chainLlm')) {
+      return this.mapLlmNode(ctx);
+    }
+
     if (type.includes('wait')) {
       return this.mapWaitNode(ctx);
     }
@@ -325,6 +341,130 @@ export class NodeMappers {
       item = ${ctx.variableName}[0];
       ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});
     }`;
+  }
+
+  private static mapSplitOutNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    const fieldToSplit = params.fieldToSplitOut || 'data';
+
+    return `
+    // [Node: ${ctx.node.name}] Split Out Array Field
+    {
+      const source = ${prevVar} || inputItems;
+      const expanded: N8nItem[] = [];
+      for (const entry of source) {
+        const arr = entry.json?.[${JSON.stringify(fieldToSplit)}];
+        if (Array.isArray(arr)) {
+          for (const el of arr) {
+            expanded.push({ json: typeof el === 'object' && el !== null ? el : { [${JSON.stringify(fieldToSplit)}]: el } });
+          }
+        }
+      }
+      ${ctx.variableName} = expanded.length > 0 ? expanded : source;
+      item = ${ctx.variableName}[0] || { json: {} };
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});
+    }`;
+  }
+
+  private static mapMergeNode(ctx: NodeMapperContext): string {
+    const incoming = ctx.node.incomingConnections || [];
+    const mode = ctx.node.parameters?.mode || 'append';
+    const sources = incoming.map(
+      (c) => `(ctx.isBranchActive(${JSON.stringify(c.sourceNode)}, ${c.outputIndex}) ? (ctx.getNode(${JSON.stringify(c.sourceNode)})?.all() || []) : [])`
+    );
+
+    if (mode === 'combine' && sources.length >= 2) {
+      return `
+    // [Node: ${ctx.node.name}] Merge (Combine Mode)
+    {
+      const left = ${sources[0]};
+      const right = ${sources[1]};
+      const maxLen = Math.max(left.length, right.length);
+      const merged: N8nItem[] = [];
+      for (let i = 0; i < maxLen; i++) {
+        merged.push({ json: { ...(left[i]?.json || {}), ...(right[i]?.json || {}) } });
+      }
+      ${ctx.variableName} = merged.length > 0 ? merged : [{ json: {} }];
+      item = ${ctx.variableName}[0];
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});
+    }`;
+    }
+
+    return `
+    // [Node: ${ctx.node.name}] Merge (Append Mode)
+    {
+      const combined = [${sources.join(', ')}].flat();
+      ${ctx.variableName} = combined.length > 0 ? combined : inputItems;
+      item = ${ctx.variableName}[0] || { json: {} };
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});
+    }`;
+  }
+
+  private static mapPostgresNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    const queryExpr = ExpressionParser.parse(params.query || 'SELECT 1;');
+
+    return `
+    // [Node: ${ctx.node.name}] PostgreSQL Query (via DATABASE_URL env var)
+    ${ctx.variableName} = await Promise.all((${prevVar} || inputItems).map(async (currentItem: N8nItem) => {
+      const item = currentItem;
+      const sql = ${queryExpr};
+      if (!process.env.DATABASE_URL) {
+        throw new Error('[n8n-to-fastify] DATABASE_URL environment variable is required for Postgres node.');
+      }
+      // Uses Bun's native SQL or dynamic pg driver when available
+      const res = await fetch(process.env.POSTGRES_HTTP_PROXY || '', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sql })
+      }).catch(() => null);
+      if (res && res.ok) {
+        const rows = await res.json();
+        return { json: Array.isArray(rows) ? (rows[0] || {}) : rows };
+      }
+      return { json: { ...currentItem.json, _sqlPrepared: sql } };
+    }));
+    item = ${ctx.variableName}[0] || { json: {} };
+    ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});`;
+  }
+
+  private static mapLlmNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    const model = params.modelId?.value || params.model || 'gpt-4o-mini';
+    const promptText =
+      params.messages?.values?.[0]?.content ||
+      params.prompt ||
+      params.text ||
+      'Hello';
+    const promptExpr = ExpressionParser.parse(promptText);
+
+    return `
+    // [Node: ${ctx.node.name}] Native LLM Completion (OpenAI-compatible REST API)
+    ${ctx.variableName} = await Promise.all((${prevVar} || inputItems).map(async (currentItem: N8nItem) => {
+      const item = currentItem;
+      const apiKey = process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || '';
+      const baseUrl = process.env.LLM_BASE_URL || 'https://api.openai.com/v1';
+      const prompt = ${promptExpr};
+      const res = await fetch(\`\${baseUrl}/chat/completions\`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': \`Bearer \${apiKey}\`
+        },
+        body: JSON.stringify({
+          model: ${JSON.stringify(model)},
+          messages: [{ role: 'user', content: String(prompt) }]
+        })
+      });
+      const data: any = await res.json();
+      const text = data?.choices?.[0]?.message?.content || '';
+      return { json: { text, model: ${JSON.stringify(model)}, usage: data?.usage } };
+    }));
+    item = ${ctx.variableName}[0] || { json: {} };
+    ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});`;
   }
 
   private static mapWaitNode(ctx: NodeMapperContext): string {

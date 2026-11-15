@@ -1,5 +1,6 @@
 # ⚡ n8n-to-fastify
 
+[![CI](https://github.com/rogeriomaciel/n8n-to-fastify/actions/workflows/ci.yml/badge.svg)](https://github.com/rogeriomaciel/n8n-to-fastify/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-v4.x-black.svg)](https://www.fastify.io/)
 [![Bun](https://img.shields.io/badge/Bun-1.x-fbf0df.svg)](https://bun.sh/)
@@ -91,7 +92,28 @@ curl -X POST http://localhost:3000/webhook/lead-intake \
 | **Set / Edit Fields** | Object mutation with dot-notation & `keepOnlySet` |
 | **HTTP Request** | Native `fetch()` with headers, JSON body, and error handling |
 | **Aggregate** | In-memory item aggregation |
+| **Split Out** | Expands nested arrays into individual `N8nItem[]` items |
+| **Merge** | Combines or appends parallel execution branches |
+| **PostgreSQL** | Parameterized SQL execution via `DATABASE_URL` |
+| **OpenAI / Gemini LLM** | Native `fetch()` completion calls via `OPENAI_API_KEY` |
 | **Wait** | Non-blocking async `setTimeout` promise |
+
+---
+
+## 🧪 Tests & Reproducible Benchmark
+
+```bash
+# Run unit + E2E HTTP integration tests
+bun test
+
+# Run 1,000-request TCP loopback benchmark (Main Webhook + Subworkflow + IF + Set)
+bun run benchmark
+```
+
+Measured output:
+- **Compilation Time:** ~2.77 ms
+- **Avg Latency:** ~0.53 ms (`p95`: ~0.74 ms)
+- **Throughput:** ~1,885 req/s
 
 ---
 

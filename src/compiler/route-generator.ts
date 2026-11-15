@@ -71,12 +71,15 @@ import { WorkflowContext } from '../runtime/workflow-context';
         reply.header('X-Execution-Time', \`\${durationMs}ms\`);
 
         if (context.webhookResponse) {
-          return reply.code(context.webhookResponse.statusCode).send(context.webhookResponse.body);
+          reply.code(context.webhookResponse.statusCode);
+          return context.webhookResponse.body;
         }
-        return reply.code(200).send(items.length === 1 ? items[0].json : items.map(i => i.json));
+        reply.code(200);
+        return items.length === 1 ? items[0].json : items.map(i => i.json);
       } catch (err: any) {
         request.log.error(err);
-        return reply.code(500).send({ error: 'Workflow Execution Error', message: err.message });
+        reply.code(500);
+        return { error: 'Workflow Execution Error', message: err.message };
       }
     }
   });
