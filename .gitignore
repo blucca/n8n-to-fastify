@@ -1,5 +1,10 @@
 node_modules/
 dist/
 compiled-service/
+coverage/
 .env
+.env.*
 *.log
+*.pem
+*.key
+.DS_Store
