@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>n8n-to-fastify Playground — Transpile n8n Workflows to TypeScript in Browser</title>
+  <style>
+    :root {
+      --bg: #07090e;
+      --surface: #0b101b;
+      --surface-2: #0f172a;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --emerald: #10b981;
+      --emerald-bright: #34d399;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #fff;
+    }
+    .badge {
+      font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--emerald-bright);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 13px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .btn:hover { border-color: rgba(255,255,255,0.22); background: #1e293b; }
+    .btn-star {
+      background: var(--emerald);
+      color: #022c22;
+      border-color: var(--emerald);
+      font-weight: 700;
+    }
+    .btn-star:hover { background: var(--emerald-bright); border-color: var(--emerald-bright); }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 20px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tab {
+      padding: 5px 11px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .tab.active {
+      background: var(--surface-2);
+      color: var(--emerald-bright);
+      border-color: var(--border);
+    }
+    .stats {
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--emerald-bright);
+    }
+    .stats.error { color: var(--red); }
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 0;
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-right: 1px solid var(--border);
+    }
+    .pane:last-child { border-right: none; }
+    .pane-header {
+      padding: 8px 16px;
+      font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    textarea {
+      flex: 1;
+      width: 100%;
+      border: none;
+      outline: none;
+      resize: none;
+      padding: 16px;
+      background: var(--bg);
+      color: #cbd5e1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    pre {
+      flex: 1;
+      margin: 0;
+      padding: 16px;
+      overflow: auto;
+      background: #05070b;
+      color: #a7f3d0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    footer {
+      padding: 8px 20px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    footer code {
+      color: var(--emerald-bright);
+      background: var(--surface-2);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    footer a { color: var(--emerald-bright); text-decoration: none; }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+      .pane { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>⚡ n8n-to-fastify</h1>
+      <span class="badge">100% Client-Side • Zero Data Leaves Your Browser</span>
+    </div>
+    <div class="header-actions">
+      <a class="btn" href="https://rogeriomaciel.com.br/en/" target="_blank" rel="noopener">Migration Consulting</a>
+      <a class="btn btn-star" href="https://github.com/rogeriomaciel/n8n-to-fastify" target="_blank" rel="noopener">⭐ Star on GitHub</a>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="toolbar-group">
+      <button class="btn" id="btn-example">Load Lead Intake Example</button>
+      <button class="btn" id="btn-format">Format JSON</button>
+      <span id="status" class="stats">Ready</span>
+    </div>
+    <div class="toolbar-group">
+      <button class="tab active" data-tab="workflow">workflow.ts</button>
+      <button class="tab" data-tab="routes">routes/index.ts</button>
+      <button class="btn" id="btn-copy">Copy Code</button>
+      <button class="btn" id="btn-download">Download .ts</button>
+    </div>
+  </div>
+
+  <main>
+    <section class="pane">
+      <div class="pane-header">
+        <span>Input: n8n Workflow JSON</span>
+        <span>Paste any exported .json</span>
+      </div>
+      <textarea id="json-input" spellcheck="false" placeholder="Paste your n8n workflow JSON here..."></textarea>
+    </section>
+
+    <section class="pane">
+      <div class="pane-header">
+        <span id="output-label">Output: Standalone TypeScript (Fastify)</span>
+        <span>&lt; 5ms runtime latency</span>
+      </div>
+      <pre id="ts-output"></pre>
+    </section>
+  </main>
+
+  <footer>
+    <span>Want full multi-workflow compilation, in-memory subworkflow registry &amp; CI/CD? Run: <code>bun run compile ./workflows --out ./dist</code></span>
+    <span>Built by <a href="https://github.com/rogeriomaciel" target="_blank" rel="noopener">Rogério Maciel</a></span>
+  </footer>
+
+  <script src="./compiler.js"></script>
+  <script>
+    const SAMPLE_JSON = {
+      "id": "lead-intake-main",
+      "name": "Lead Intake Webhook",
+      "nodes": [
+        {
+          "id": "n1",
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "typeVersion": 2,
+          "position": [100, 300],
+          "parameters": { "httpMethod": "POST", "path": "lead-intake" }
+        },
+        {
+          "id": "n2",
+          "name": "Validate Lead Subworkflow",
+          "type": "n8n-nodes-base.executeWorkflow",
+          "typeVersion": 1,
+          "position": [320, 300],
+          "parameters": { "workflowId": "sub-validate-lead" }
+        },
+        {
+          "id": "n3",
+          "name": "Is Valid Lead?",
+          "type": "n8n-nodes-base.if",
+          "typeVersion": 2,
+          "position": [540, 300],
+          "parameters": {
+            "conditions": {
+              "combinator": "and",
+              "conditions": [
+                { "leftValue": "={{ $json.isValid }}", "rightValue": true, "operator": { "operation": "equals" } }
+              ]
+            }
+          }
+        },
+        {
+          "id": "n4",
+          "name": "Enrich Payload",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 3,
+          "position": [760, 200],
+          "parameters": {
+            "assignments": {
+              "assignments": [
+                { "name": "status", "value": "accepted" },
+                { "name": "processedAt", "value": "={{ $now }}" }
+              ]
+            }
+          }
+        },
+        {
+          "id": "n5",
+          "name": "Respond Success",
+          "type": "n8n-nodes-base.respondToWebhook",
+          "typeVersion": 1,
+          "position": [980, 200],
+          "parameters": { "respondWith": "firstIncomingItem", "options": { "responseCode": 200 } }
+        },
+        {
+          "id": "n6",
+          "name": "Respond Rejected",
+          "type": "n8n-nodes-base.respondToWebhook",
+          "typeVersion": 1,
+          "position": [760, 420],
+          "parameters": {
+            "respondWith": "json",
+            "responseBody": "{ \"status\": \"rejected\", \"reason\": \"Invalid email format\" }",
+            "options": { "responseCode": 400 }
+          }
+        }
+      ],
+      "connections": {
+        "Webhook": { "main": [[{ "node": "Validate Lead Subworkflow", "type": "main", "index": 0 }]] },
+        "Validate Lead Subworkflow": { "main": [[{ "node": "Is Valid Lead?", "type": "main", "index": 0 }]] },
+        "Is Valid Lead?": {
+          "main": [
+            [{ "node": "Enrich Payload", "type": "main", "index": 0 }],
+            [{ "node": "Respond Rejected", "type": "main", "index": 0 }]
+          ]
+        },
+        "Enrich Payload": { "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]] }
+      }
+    };
+
+    const jsonInput = document.getElementById('json-input');
+    const tsOutput = document.getElementById('ts-output');
+    const statusEl = document.getElementById('status');
+    const outputLabel = document.getElementById('output-label');
+
+    let activeTab = 'workflow';
+    let lastResult = null;
+
+    function compileNow() {
+      try {
+        const res = window.N8nToFastify.compileWorkflowJson(jsonInput.value);
+        lastResult = res;
+        statusEl.textContent = `⚡ Compiled ${res.nodeCount} nodes in ${res.elapsedMs}ms`;
+        statusEl.className = 'stats';
+        renderTab();
+      } catch (err) {
+        statusEl.textContent = `❌ ${err.message}`;
+        statusEl.className = 'stats error';
+      }
+    }
+
+    function renderTab() {
+      if (!lastResult) return;
+      if (activeTab === 'workflow') {
+        tsOutput.textContent = lastResult.workflowCode;
+        outputLabel.textContent = 'Output: Standalone TypeScript (workflow.ts)';
+      } else {
+        tsOutput.textContent = lastResult.routesCode;
+        outputLabel.textContent = 'Output: Fastify HTTP Route Handler (routes/index.ts)';
+      }
+    }
+
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        activeTab = btn.dataset.tab;
+        renderTab();
+      });
+    });
+
+    document.getElementById('btn-example').addEventListener('click', () => {
+      jsonInput.value = JSON.stringify(SAMPLE_JSON, null, 2);
+      compileNow();
+    });
+
+    document.getElementById('btn-format').addEventListener('click', () => {
+      try {
+        jsonInput.value = JSON.stringify(JSON.parse(jsonInput.value), null, 2);
+        compileNow();
+      } catch {}
+    });
+
+    document.getElementById('btn-copy').addEventListener('click', async (e) => {
+      await navigator.clipboard.writeText(tsOutput.textContent);
+      e.target.textContent = '✓ Copied!';
+      setTimeout(() => e.target.textContent = 'Copy Code', 1500);
+    });
+
+    document.getElementById('btn-download').addEventListener('click', () => {
+      const blob = new Blob([tsOutput.textContent], { type: 'text/typescript' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = activeTab === 'workflow' ? 'workflow.ts' : 'routes.ts';
+      a.click();
+    });
+
+    jsonInput.addEventListener('input', compileNow);
+
+    // Initial load
+    jsonInput.value = JSON.stringify(SAMPLE_JSON, null, 2);
+    compileNow();
+  </script>
+</body>
+</html>

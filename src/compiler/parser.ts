@@ -1,40 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { CoreWorkflowParser, ParsedWorkflow, N8nNode, N8nConnectionTarget } from './core-parser';
 
-export interface N8nNode {
-  id: string;
-  name: string;
-  type: string;
-  typeVersion: number;
-  position: [number, number];
-  parameters: Record<string, any>;
-  credentials?: Record<string, any>;
-  onError?: string;
-  incomingConnections?: { sourceNode: string; outputIndex: number }[];
-  ancestorTriggers?: string[];
-}
+export type { ParsedWorkflow, N8nNode, N8nConnectionTarget };
 
-export interface N8nConnectionTarget {
-  node: string;
-  type: string;
-  index: number;
-}
-
-export interface ParsedWorkflow {
-  id: string;
-  name: string;
-  fileName: string;
-  relativePath: string;
-  nodes: N8nNode[];
-  connections: Record<string, any>;
-  orderedNodes: N8nNode[];
-  triggers: N8nNode[];
-}
-
-export class WorkflowParser {
-  /**
-   * Parses either a single workflow JSON file or recursively scans a directory of workflows.
-   */
+export class WorkflowParser extends CoreWorkflowParser {
   static parseInput(inputPath: string): ParsedWorkflow[] {
     const resolved = path.resolve(inputPath);
     if (!fs.existsSync(resolved)) {
@@ -53,9 +23,6 @@ export class WorkflowParser {
     return this.parseDirectory(resolved, resolved);
   }
 
-  /**
-   * Recursively reads exported n8n workflow JSON files from a directory.
-   */
   static parseDirectory(dirPath: string, rootDirPath?: string): ParsedWorkflow[] {
     const root = rootDirPath || dirPath;
     let results: ParsedWorkflow[] = [];
@@ -86,161 +53,5 @@ export class WorkflowParser {
     }
 
     return results;
-  }
-
-  /**
-   * Converts raw n8n workflow JSON into a topologically sorted DAG representation.
-   */
-  static parseWorkflow(json: any, fallbackName: string, relativePath?: string): ParsedWorkflow | null {
-    if (!json || !Array.isArray(json.nodes)) {
-      return null;
-    }
-
-    const id = json.id || fallbackName;
-    const name = json.name || fallbackName;
-    const nodes: N8nNode[] = json.nodes || [];
-    const connections = json.connections || {};
-    const relPath = relativePath || `${fallbackName}.json`;
-
-    const incomingMap = new Map<string, { sourceNode: string; outputIndex: number }[]>();
-    nodes.forEach((n) => incomingMap.set(n.name, []));
-
-    Object.entries(connections).forEach(([sourceNodeName, outputs]: [string, any]) => {
-      if (outputs.main && Array.isArray(outputs.main)) {
-        outputs.main.forEach((outputTargets: any[], outputIndex: number) => {
-          if (Array.isArray(outputTargets)) {
-            outputTargets.forEach((target) => {
-              if (target && target.node && incomingMap.has(target.node)) {
-                incomingMap.get(target.node)?.push({ sourceNode: sourceNodeName, outputIndex });
-              }
-            });
-          }
-        });
-      }
-    });
-
-    nodes.forEach((node) => {
-      node.incomingConnections = incomingMap.get(node.name) || [];
-    });
-
-    const triggers = nodes.filter(
-      (node) =>
-        node.type.includes('webhook') ||
-        node.type.includes('trigger') ||
-        node.type.includes('cron')
-    );
-    const triggerNames = new Set(triggers.map((t) => t.name));
-
-    nodes.forEach((node) => {
-      const ancestorTriggers = new Set<string>();
-      const visited = new Set<string>();
-      const queue = [...(incomingMap.get(node.name) || []).map((c) => c.sourceNode)];
-
-      while (queue.length > 0) {
-        const curr = queue.shift()!;
-        if (visited.has(curr)) continue;
-        visited.add(curr);
-
-        if (triggerNames.has(curr)) {
-          ancestorTriggers.add(curr);
-        }
-
-        const parents = incomingMap.get(curr) || [];
-        parents.forEach((p) => queue.push(p.sourceNode));
-      }
-
-      node.ancestorTriggers = Array.from(ancestorTriggers);
-    });
-
-    const orderedNodes = this.topologicalSort(nodes, connections);
-
-    return {
-      id,
-      name,
-      fileName: fallbackName,
-      relativePath: relPath.replace(/\.json$/, '.ts'),
-      nodes,
-      connections,
-      orderedNodes,
-      triggers,
-    };
-  }
-
-  /**
-   * Kahn-inspired DFS topological sort with strict cycle detection.
-   */
-  private static topologicalSort(nodes: N8nNode[], connections: Record<string, any>): N8nNode[] {
-    const nodeMap = new Map<string, N8nNode>();
-    const adjList = new Map<string, string[]>();
-
-    nodes.forEach((node) => {
-      nodeMap.set(node.name, node);
-      adjList.set(node.name, []);
-    });
-
-    Object.entries(connections).forEach(([sourceNodeName, outputs]: [string, any]) => {
-      if (outputs.main && Array.isArray(outputs.main)) {
-        outputs.main.forEach((outputTargets: any[]) => {
-          if (Array.isArray(outputTargets)) {
-            outputTargets.forEach((target: N8nConnectionTarget) => {
-              if (target && target.node && nodeMap.has(target.node)) {
-                adjList.get(sourceNodeName)?.push(target.node);
-              }
-            });
-          }
-        });
-      }
-    });
-
-    const visited = new Set<string>();
-    const visiting = new Set<string>();
-    const result: N8nNode[] = [];
-
-    const dfs = (nodeName: string, pathStack: string[] = []) => {
-      if (visited.has(nodeName)) return;
-      if (visiting.has(nodeName)) {
-        const cycle = [...pathStack, nodeName].join(' -> ');
-        throw new Error(
-          `[n8n-to-fastify] Cyclic dependency detected in workflow DAG: (${cycle}). Transpiled workflows must be strict Directed Acyclic Graphs.`
-        );
-      }
-      visiting.add(nodeName);
-      pathStack.push(nodeName);
-
-      const neighbors = adjList.get(nodeName) || [];
-      for (const neighbor of neighbors) {
-        dfs(neighbor, pathStack);
-      }
-
-      pathStack.pop();
-      visiting.delete(nodeName);
-      visited.add(nodeName);
-
-      const node = nodeMap.get(nodeName);
-      if (node) {
-        result.push(node);
-      }
-    };
-
-    const inDegree = new Map<string, number>();
-    nodes.forEach((n) => inDegree.set(n.name, 0));
-    for (const neighbors of adjList.values()) {
-      for (const neighbor of neighbors) {
-        inDegree.set(neighbor, (inDegree.get(neighbor) || 0) + 1);
-      }
-    }
-
-    const roots = nodes.map((n) => n.name).filter((name) => inDegree.get(name) === 0);
-    for (const root of roots) {
-      dfs(root);
-    }
-
-    for (const node of nodes) {
-      if (!visited.has(node.name)) {
-        dfs(node.name);
-      }
-    }
-
-    return result.reverse();
   }
 }
