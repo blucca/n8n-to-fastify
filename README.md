@@ -8,7 +8,7 @@
 
 > **Use n8n as your visual IDE in staging. Compile & deploy pure, bare-metal Fastify microservices to production via CI/CD.**
 >
-> **[⚡ Try the Live Browser Playground](https://rogeriomaciel.github.io/n8n-to-fastify/)** *(100% client-side — paste any n8n JSON, zero data leaves your browser)*
+> **[⚡ Try the Live Browser Playground](https://www.rogeriomaciel.com.br/en/n8n-to-fastify/)** *(100% client-side — paste any n8n JSON, zero data leaves your browser)*
 
 **`n8n-to-fastify`** is an Ahead-Of-Time (AOT) compiler that ingests exported n8n workflow JSONs (including nested subworkflows) and transpiles them into standalone, zero-overhead TypeScript/Fastify HTTP services.
 
