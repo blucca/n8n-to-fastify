@@ -1,0 +1,101 @@
+{
+  "id": "lead-intake-main",
+  "name": "Lead Intake Webhook",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake"
+      }
+    },
+    {
+      "id": "n2",
+      "name": "Validate Lead Subworkflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [320, 300],
+      "parameters": {
+        "workflowId": "sub-validate-lead"
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Is Valid Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [540, 300],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": true,
+              "operator": { "operation": "equals" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n4",
+      "name": "Enrich Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [760, 200],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "status", "value": "accepted" },
+            { "name": "processedAt", "value": "={{ $now }}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n5",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [980, 200],
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "n6",
+      "name": "Respond Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [760, 420],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"status\": \"rejected\", \"reason\": \"Invalid email format\" }",
+        "options": { "responseCode": 400 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Validate Lead Subworkflow", "type": "main", "index": 0 }]]
+    },
+    "Validate Lead Subworkflow": {
+      "main": [[{ "node": "Is Valid Lead?", "type": "main", "index": 0 }]]
+    },
+    "Is Valid Lead?": {
+      "main": [
+        [{ "node": "Enrich Payload", "type": "main", "index": 0 }],
+        [{ "node": "Respond Rejected", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enrich Payload": {
+      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+    }
+  }
+}

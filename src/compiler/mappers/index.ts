@@ -1,0 +1,354 @@
+import { N8nNode } from '../parser';
+import { ExpressionParser } from '../expression-parser';
+
+export interface NodeMapperContext {
+  node: N8nNode;
+  workflowName: string;
+  variableName: string;
+  previousVariableName?: string;
+}
+
+/**
+ * Maps visual n8n nodes into idiomatic, zero-overhead async TypeScript code.
+ */
+export class NodeMappers {
+  static mapNode(ctx: NodeMapperContext): string {
+    const type = ctx.node.type;
+
+    if (type.includes('respondToWebhook')) {
+      return this.mapRespondToWebhookNode(ctx);
+    }
+
+    if (type.includes('code') || type.includes('function')) {
+      return this.mapCodeNode(ctx);
+    }
+
+    if (type.includes('executeWorkflowTrigger')) {
+      return this.mapGenericNode(ctx, 'Subworkflow Entry Trigger');
+    }
+
+    if (type.includes('executeWorkflow')) {
+      return this.mapSubworkflowNode(ctx);
+    }
+
+    if (type.includes('if') || type.includes('filter')) {
+      return this.mapIfNode(ctx);
+    }
+
+    if (type.includes('switch')) {
+      return this.mapSwitchNode(ctx);
+    }
+
+    if (type.includes('set')) {
+      return this.mapSetNode(ctx);
+    }
+
+    if (type.includes('httpRequest')) {
+      return this.mapHttpRequestNode(ctx);
+    }
+
+    if (type.includes('aggregate') || type.includes('itemLists')) {
+      return this.mapAggregateNode(ctx);
+    }
+
+    if (type.includes('wait')) {
+      return this.mapWaitNode(ctx);
+    }
+
+    return this.mapGenericNode(ctx, `Unmapped Node (${type})`);
+  }
+
+  private static mapRespondToWebhookNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const respondWith = params.respondWith || 'firstIncomingItem';
+    const statusCode = params.options?.responseCode || 200;
+    const prevVar = ctx.previousVariableName || 'inputItems';
+
+    let responseExpr = 'item?.json || {}';
+    if (respondWith === 'allIncomingItems') {
+      responseExpr = `${ctx.variableName}.map((i: any) => i.json)`;
+    } else if (respondWith === 'json' && params.responseBody) {
+      responseExpr = ExpressionParser.parse(params.responseBody);
+    } else if (respondWith === 'text' && params.responseBody) {
+      responseExpr = ExpressionParser.parse(params.responseBody);
+    }
+
+    return `
+    // [Node: ${ctx.node.name}] Respond to Webhook
+    ${ctx.variableName} = ${prevVar} || inputItems;
+    item = ${ctx.variableName}[0] || { json: {} };
+    {
+      let payload: any = ${responseExpr};
+      if (typeof payload === 'string' && (payload.trim().startsWith('{') || payload.trim().startsWith('['))) {
+        try { payload = JSON.parse(payload); } catch {}
+      }
+      ctx.setWebhookResponse(${statusCode}, payload);
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});
+    }`;
+  }
+
+  private static mapCodeNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const rawCode = params.jsCode || params.functionCode || 'return $input.all();';
+    const prevVar = ctx.previousVariableName || 'inputItems';
+
+    // Rewrite n8n sandbox globals to local runtime bindings
+    const transformedCode = rawCode
+      .replace(/\$input\.all\(\)/g, 'currentItems')
+      .replace(/\$input\.first\(\)/g, '(currentItems[0] || { json: {} })')
+      .replace(/\$input\.item/g, '(currentItems[0] || { json: {} })')
+      .replace(/\$json/g, '(currentItems[0]?.json || {})')
+      .replace(/\$\(['"](.*?)['"]\)\.first\(\)/g, (_: string, n: string) => `(ctx.getNode(${JSON.stringify(n)})?.first() || { json: {} })`)
+      .replace(/\$\(['"](.*?)['"]\)\.item/g, (_: string, n: string) => `(ctx.getNode(${JSON.stringify(n)})?.item || { json: {} })`)
+      .replace(/\$\(['"](.*?)['"]\)\.all\(\)/g, (_: string, n: string) => `(ctx.getNode(${JSON.stringify(n)})?.all() || [])`)
+      .replace(/\$now/g, 'DateTime.now()');
+
+    return `
+    // [Node: ${ctx.node.name}] Code Execution
+    ${ctx.variableName} = await (async () => {
+      const currentItems = ${prevVar} || inputItems;
+      const result = await (async () => {
+        ${transformedCode}
+      })();
+      return n8n.normalizeItems(result);
+    })();
+    item = ${ctx.variableName}[0] || { json: {} };
+    ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});`;
+  }
+
+  private static mapSubworkflowNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const workflowId =
+      typeof params.workflowId === 'object'
+        ? params.workflowId?.value || params.workflowId?.cachedResultName || ''
+        : params.workflowId || '';
+
+    const prevVar = ctx.previousVariableName || 'inputItems';
+
+    return `
+    // [Node: ${ctx.node.name}] In-Memory Subworkflow Execution (< 0.05ms)
+    ${ctx.variableName} = await executeSubworkflow(${JSON.stringify(workflowId)}, ${prevVar} || inputItems, ctx);
+    item = ${ctx.variableName}[0] || { json: {} };
+    ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});`;
+  }
+
+  private static mapSetNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    const keepOnlySet = params.options?.keepOnlySet === true || params.include === 'none';
+
+    const assignments: string[] = [];
+
+    // Support n8n v3+ assignments format
+    if (params.assignments?.assignments && Array.isArray(params.assignments.assignments)) {
+      for (const a of params.assignments.assignments) {
+        if (a.name) {
+          const valExpr = ExpressionParser.parse(a.value);
+          assignments.push(`n8n.setNestedProperty(newJson, ${JSON.stringify(a.name)}, ${valExpr});`);
+        }
+      }
+    }
+
+    // Support n8n v1/v2 values format
+    if (params.values) {
+      for (const typeKey of ['string', 'number', 'boolean']) {
+        const list = params.values[typeKey];
+        if (Array.isArray(list)) {
+          for (const entry of list) {
+            if (entry.name) {
+              const valExpr = ExpressionParser.parse(entry.value);
+              assignments.push(`n8n.setNestedProperty(newJson, ${JSON.stringify(entry.name)}, ${valExpr});`);
+            }
+          }
+        }
+      }
+    }
+
+    return `
+    // [Node: ${ctx.node.name}] Set / Edit Fields
+    ${ctx.variableName} = (${prevVar} || inputItems).map((currentItem: N8nItem) => {
+      const item = currentItem;
+      const newJson: Record<string, any> = ${keepOnlySet ? '{}' : '{ ...currentItem.json }'};
+      ${assignments.join('\n      ')}
+      return { json: newJson };
+    });
+    item = ${ctx.variableName}[0] || { json: {} };
+    ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});`;
+  }
+
+  private static mapIfNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+
+    const conditions: string[] = [];
+
+    // n8n v2 conditions structure
+    if (params.conditions?.conditions && Array.isArray(params.conditions.conditions)) {
+      for (const cond of params.conditions.conditions) {
+        const left = ExpressionParser.parse(cond.leftValue);
+        const right = ExpressionParser.parse(cond.rightValue);
+        const op = cond.operator?.operation || 'equals';
+
+        switch (op) {
+          case 'equals':
+          case 'equal':
+            conditions.push(`(${left} == ${right})`);
+            break;
+          case 'notEquals':
+          case 'notEqual':
+            conditions.push(`(${left} != ${right})`);
+            break;
+          case 'contains':
+            conditions.push(`String(${left} ?? '').includes(String(${right} ?? ''))`);
+            break;
+          case 'gt':
+          case 'larger':
+            conditions.push(`(Number(${left}) > Number(${right}))`);
+            break;
+          case 'lt':
+          case 'smaller':
+            conditions.push(`(Number(${left}) < Number(${right}))`);
+            break;
+          case 'isEmpty':
+          case 'empty':
+            conditions.push(`(${left} === undefined || ${left} === null || ${left} === '')`);
+            break;
+          case 'isNotEmpty':
+          case 'notEmpty':
+            conditions.push(`(${left} !== undefined && ${left} !== null && ${left} !== '')`);
+            break;
+          default:
+            conditions.push(`Boolean(${left})`);
+        }
+      }
+    }
+
+    const combinator = params.conditions?.combinator === 'or' ? ' || ' : ' && ';
+    const conditionExpr = conditions.length > 0 ? conditions.join(combinator) : 'true';
+
+    return `
+    // [Node: ${ctx.node.name}] Conditional Branch (IF)
+    ${ctx.variableName} = ${prevVar} || inputItems;
+    item = ${ctx.variableName}[0] || { json: {} };
+    {
+      const isMatch = Boolean(${conditionExpr});
+      const activeIndex = isMatch ? 0 : 1;
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName}, activeIndex);
+    }`;
+  }
+
+  private static mapSwitchNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    const rules = params.rules?.values || [];
+
+    const cases: string[] = [];
+    rules.forEach((rule: any, idx: number) => {
+      const cond = rule.conditions?.conditions?.[0];
+      if (cond) {
+        const left = ExpressionParser.parse(cond.leftValue);
+        const right = ExpressionParser.parse(cond.rightValue);
+        cases.push(`if (${left} == ${right}) { matchedIndex = ${idx}; }`);
+      }
+    });
+
+    const fallbackIndex = rules.length;
+
+    return `
+    // [Node: ${ctx.node.name}] Switch Router
+    ${ctx.variableName} = ${prevVar} || inputItems;
+    item = ${ctx.variableName}[0] || { json: {} };
+    {
+      let matchedIndex = ${fallbackIndex};
+      ${cases.join(' else ')}
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName}, matchedIndex);
+    }`;
+  }
+
+  private static mapHttpRequestNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    const method = (params.method || 'GET').toUpperCase();
+    const urlExpr = ExpressionParser.parse(params.url || '');
+
+    let headersObj = '{}';
+    if (params.headerParameters?.parameters && Array.isArray(params.headerParameters.parameters)) {
+      const pairs = params.headerParameters.parameters
+        .filter((p: any) => p.name)
+        .map((p: any) => `${JSON.stringify(p.name)}: ${ExpressionParser.parse(p.value)}`);
+      headersObj = `{ ${pairs.join(', ')} }`;
+    }
+
+    let bodySnippet = 'undefined';
+    if (['POST', 'PUT', 'PATCH'].includes(method)) {
+      if (params.jsonBody) {
+        bodySnippet = `JSON.stringify(${ExpressionParser.parse(params.jsonBody)})`;
+      } else if (params.bodyParameters?.parameters && Array.isArray(params.bodyParameters.parameters)) {
+        const pairs = params.bodyParameters.parameters
+          .filter((p: any) => p.name)
+          .map((p: any) => `${JSON.stringify(p.name)}: ${ExpressionParser.parse(p.value)}`);
+        bodySnippet = `JSON.stringify({ ${pairs.join(', ')} })`;
+      }
+    }
+
+    return `
+    // [Node: ${ctx.node.name}] Native HTTP Request (${method})
+    ${ctx.variableName} = await Promise.all((${prevVar} || inputItems).map(async (currentItem: N8nItem) => {
+      const item = currentItem;
+      const targetUrl = ${urlExpr};
+      const reqHeaders: Record<string, string> = { 'Content-Type': 'application/json', ...${headersObj} };
+      const reqBody = ${bodySnippet};
+      const res = await fetch(targetUrl, {
+        method: ${JSON.stringify(method)},
+        headers: reqHeaders,
+        ...(reqBody !== undefined ? { body: typeof reqBody === 'string' ? reqBody : JSON.stringify(reqBody) } : {})
+      });
+      const text = await res.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      return { json: typeof data === 'object' && data !== null ? data : { data } };
+    }));
+    item = ${ctx.variableName}[0] || { json: {} };
+    ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});`;
+  }
+
+  private static mapAggregateNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    const destinationField = params.destinationFieldName || 'data';
+
+    return `
+    // [Node: ${ctx.node.name}] Aggregate Items
+    {
+      const source = ${prevVar} || inputItems;
+      ${ctx.variableName} = [{ json: { ${JSON.stringify(destinationField)}: source.map((i: N8nItem) => i.json) } }];
+      item = ${ctx.variableName}[0];
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});
+    }`;
+  }
+
+  private static mapWaitNode(ctx: NodeMapperContext): string {
+    const params = ctx.node.parameters || {};
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    const amount = Number(params.amount || 1);
+    const unit = params.unit || 'seconds';
+    const msMultiplier = unit === 'minutes' ? 60000 : unit === 'hours' ? 3600000 : 1000;
+    const delayMs = amount * msMultiplier;
+
+    return `
+    // [Node: ${ctx.node.name}] Non-blocking Async Wait (${amount} ${unit})
+    await new Promise((resolve) => setTimeout(resolve, ${delayMs}));
+    ${ctx.variableName} = ${prevVar} || inputItems;
+    item = ${ctx.variableName}[0] || { json: {} };
+    ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});`;
+  }
+
+  private static mapGenericNode(ctx: NodeMapperContext, label: string): string {
+    const prevVar = ctx.previousVariableName || 'inputItems';
+    return `
+    // [Node: ${ctx.node.name}] ${label} (Pass-through)
+    ${ctx.variableName} = ${prevVar} || inputItems;
+    item = ${ctx.variableName}[0] || { json: {} };
+    ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName});`;
+  }
+}

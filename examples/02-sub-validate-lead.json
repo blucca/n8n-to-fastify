@@ -1,0 +1,29 @@
+{
+  "id": "sub-validate-lead",
+  "name": "Subworkflow: Validate Lead",
+  "nodes": [
+    {
+      "id": "s1",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "parameters": {}
+    },
+    {
+      "id": "s2",
+      "name": "Validate Email & Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 300],
+      "parameters": {
+        "jsCode": "const email = String($json.email || '').trim().toLowerCase();\nconst name = String($json.name || 'Anonymous').trim();\nconst isValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\nreturn [{ json: { email, name, isValid } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{ "node": "Validate Email & Normalize", "type": "main", "index": 0 }]]
+    }
+  }
+}
