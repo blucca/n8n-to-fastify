@@ -244,12 +244,16 @@ export class NodeMappers {
 
     return `
     // [Node: ${ctx.node.name}] Conditional Branch (IF)
-    ${ctx.variableName} = ${prevVar} || inputItems;
-    item = ${ctx.variableName}[0] || { json: {} };
     {
-      const isMatch = Boolean(${conditionExpr});
-      const activeIndex = isMatch ? 0 : 1;
-      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, ${ctx.variableName}, activeIndex);
+      const trueItems: N8nItem[] = [];
+      const falseItems: N8nItem[] = [];
+      for (const item of (${prevVar} || inputItems)) {
+        (Boolean(${conditionExpr}) ? trueItems : falseItems).push(item);
+      }
+      ${ctx.variableName} = trueItems;
+      item = trueItems[0] || falseItems[0] || { json: {} };
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, trueItems, 0);
+      ctx.setNodeOutput(${JSON.stringify(ctx.node.name)}, falseItems, 1);
     }`;
   }
 
@@ -371,7 +375,7 @@ export class NodeMappers {
     const incoming = ctx.node.incomingConnections || [];
     const mode = ctx.node.parameters?.mode || 'append';
     const sources = incoming.map(
-      (c) => `(ctx.isBranchActive(${JSON.stringify(c.sourceNode)}, ${c.outputIndex}) ? (ctx.getNode(${JSON.stringify(c.sourceNode)})?.all() || []) : [])`
+      (c) => `(ctx.isBranchActive(${JSON.stringify(c.sourceNode)}, ${c.outputIndex}) ? (ctx.getNode(${JSON.stringify(c.sourceNode)}, ${c.outputIndex})?.all() || []) : [])`
     );
 
     if (mode === 'combine' && sources.length >= 2) {

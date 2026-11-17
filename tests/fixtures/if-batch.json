@@ -1,0 +1,164 @@
+{
+  "id": "n2fBatchIf645",
+  "name": "Batch lead routing parity",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "input-leads",
+      "name": "Input leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{\"json\": {\"id\": \"A\", \"email\": \"ada@analyticalengine.org\", \"name\": \"Ada\"}}, {\"json\": {\"id\": \"B\", \"email\": \"not-an-email\", \"name\": \"Invalid\"}}, {\"json\": {\"id\": \"C\", \"email\": \"GRACE@COMPILER.ORG\", \"name\": \"Grace\"}}];"
+      }
+    },
+    {
+      "id": "normalize-leads",
+      "name": "Normalize leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map(({ json }) => {\n  const email = String(json.email || '').trim().toLowerCase();\n  const name = String(json.name || 'Anonymous').trim();\n  const isValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n  return { json: { id: json.id, email, name, isValid } };\n});"
+      }
+    },
+    {
+      "id": "is-valid-lead?",
+      "name": "Is Valid Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "email-valid",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "accepted-leads",
+      "name": "Accepted leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all();"
+      }
+    },
+    {
+      "id": "rejected-leads",
+      "name": "Rejected leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all();"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Input leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input leads": {
+      "main": [
+        [
+          {
+            "node": "Normalize leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize leads": {
+      "main": [
+        [
+          {
+            "node": "Is Valid Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid Lead?": {
+      "main": [
+        [
+          {
+            "node": "Accepted leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

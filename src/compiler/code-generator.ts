@@ -68,12 +68,13 @@ const DateTime = {
       if (node.incomingConnections && node.incomingConnections.length > 0) {
         if (node.incomingConnections.length === 1) {
           const conn = node.incomingConnections[0];
-          actualPrevVar = `(ctx.isBranchActive(${JSON.stringify(conn.sourceNode)}, ${conn.outputIndex}) ? ctx.getNode(${JSON.stringify(conn.sourceNode)})?.all() : null)`;
+          actualPrevVar = `(ctx.isBranchActive(${JSON.stringify(conn.sourceNode)}, ${conn.outputIndex}) ? ctx.getNode(${JSON.stringify(conn.sourceNode)}, ${conn.outputIndex})?.all() : null)`;
         } else {
           const choices = node.incomingConnections.map(
             (conn) =>
-              `(ctx.isBranchActive(${JSON.stringify(conn.sourceNode)}, ${conn.outputIndex}) ? ctx.getNode(${JSON.stringify(conn.sourceNode)})?.all() : null)`
+              `(ctx.isBranchActive(${JSON.stringify(conn.sourceNode)}, ${conn.outputIndex}) ? ctx.getNode(${JSON.stringify(conn.sourceNode)}, ${conn.outputIndex})?.all() : null)`
           );
+          // Non-Merge fan-in retains the first-active input policy; use Merge for batch union.
           actualPrevVar = `(${choices.join(' || ')})`;
         }
 

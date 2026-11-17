@@ -11,15 +11,22 @@ export interface NodeAccessor {
  * Tracks node outputs, active conditional branches (IF/Switch), and webhook reply state.
  */
 export class WorkflowContext {
-  private nodeOutputs = new Map<string, N8nItem[]>();
+  private nodeOutputs = new Map<string, Map<number, N8nItem[]>>();
   private activeBranches = new Map<string, Set<number>>();
   private executedNodes = new Set<string>();
   public webhookResponse?: { statusCode: number; body: any; headers?: Record<string, string> };
 
   public setNodeOutput(nodeName: string, items: N8nItem[], activeOutputIndex: number = 0): void {
-    this.nodeOutputs.set(nodeName, items);
+    if (!this.nodeOutputs.has(nodeName)) {
+      this.nodeOutputs.set(nodeName, new Map());
+    }
+    this.nodeOutputs.get(nodeName)!.set(activeOutputIndex, items);
     this.executedNodes.add(nodeName);
-    this.activateBranch(nodeName, activeOutputIndex);
+    if (items.length > 0) {
+      this.activateBranch(nodeName, activeOutputIndex);
+    } else {
+      this.activeBranches.get(nodeName)?.delete(activeOutputIndex);
+    }
   }
 
   public activateBranch(nodeName: string, outputIndex: number): void {
@@ -37,8 +44,8 @@ export class WorkflowContext {
     return this.executedNodes.has(nodeName);
   }
 
-  public getNode(nodeName: string): NodeAccessor {
-    const items = this.nodeOutputs.get(nodeName) || [];
+  public getNode(nodeName: string, outputIndex: number = 0): NodeAccessor {
+    const items = this.nodeOutputs.get(nodeName)?.get(outputIndex) || [];
     return {
       item: items[0],
       first: () => items[0],
