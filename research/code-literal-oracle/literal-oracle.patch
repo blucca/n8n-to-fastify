@@ -1,0 +1,10 @@
+--- a/tests/code-errors.test.ts
++++ b/tests/code-errors.test.ts
+@@ -50,6 +50,7 @@
+     const run = await load();
+     const success = await run([{ json: { shouldThrow: false } }]);
+     expect(success.items).toEqual(defaultOutput);
++    expect(success.items).toEqual([{ json: { text: 'line one\nline two', next: true } }]);
+     const failure = await run([{ json: { shouldThrow: true } }, { json: { shouldThrow: false } }]);
+     expect(failure.items).toEqual([{ json: { error: 'fixture failure', next: true } }]);
+     expect(failure.context.getNode('Source').all()).toEqual([{ json: { error: 'fixture failure' } }]);

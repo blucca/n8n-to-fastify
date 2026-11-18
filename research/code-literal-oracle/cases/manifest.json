@@ -1,0 +1,109 @@
+{
+  "source": "if ($json.shouldThrow) throw new Error(\"fixture failure\");\nreturn [{ json: { text: `line one\nline two` } }];",
+  "next": "return $input.all().map(item => ({ json: { ...item.json, next: true } }));",
+  "cases": [
+    {
+      "id": "throw_continue",
+      "onError": "continueRegularOutput",
+      "shouldThrow": true,
+      "expected": {
+        "status": "success",
+        "items": [
+          {
+            "json": {
+              "error": "fixture failure",
+              "next": true
+            }
+          }
+        ]
+      },
+      "input": [
+        {
+          "json": {
+            "shouldThrow": true
+          }
+        },
+        {
+          "json": {
+            "shouldThrow": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "throw_default",
+      "shouldThrow": true,
+      "expected": {
+        "status": "error",
+        "message": "fixture failure"
+      },
+      "input": [
+        {
+          "json": {
+            "shouldThrow": true
+          }
+        },
+        {
+          "json": {
+            "shouldThrow": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "success_continue",
+      "onError": "continueRegularOutput",
+      "shouldThrow": false,
+      "expected": {
+        "status": "success",
+        "items": [
+          {
+            "json": {
+              "text": "line one\nline two",
+              "next": true
+            }
+          }
+        ]
+      },
+      "input": [
+        {
+          "json": {
+            "shouldThrow": false
+          }
+        },
+        {
+          "json": {
+            "shouldThrow": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "success_default",
+      "shouldThrow": false,
+      "expected": {
+        "status": "success",
+        "items": [
+          {
+            "json": {
+              "text": "line one\nline two",
+              "next": true
+            }
+          }
+        ]
+      },
+      "input": [
+        {
+          "json": {
+            "shouldThrow": false
+          }
+        },
+        {
+          "json": {
+            "shouldThrow": false
+          }
+        }
+      ]
+    }
+  ]
+}

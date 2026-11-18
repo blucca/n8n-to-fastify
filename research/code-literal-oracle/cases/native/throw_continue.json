@@ -1,0 +1,97 @@
+{
+  "id": "n2f_660_throw_continue",
+  "name": "throw_continue",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "seed",
+      "name": "Seed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{\"json\":{\"shouldThrow\":true}},{\"json\":{\"shouldThrow\":false}}];"
+      }
+    },
+    {
+      "id": "source",
+      "name": "Source",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "jsCode": "if ($json.shouldThrow) throw new Error(\"fixture failure\");\nreturn [{ json: { text: `line one\nline two` } }];"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "next",
+      "name": "Next",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, next: true } }));"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Seed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed": {
+      "main": [
+        [
+          {
+            "node": "Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source": {
+      "main": [
+        [
+          {
+            "node": "Next",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "versionId": "66000000-0000-4000-8000-000000000001"
+}

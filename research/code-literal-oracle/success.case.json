@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "Code literal: preserve the original newline bytes",
+  "input": {
+    "node": "Seed",
+    "items": [
+      {
+        "shouldThrow": false
+      },
+      {
+        "shouldThrow": false
+      }
+    ]
+  },
+  "mocks": [],
+  "assertions": [
+    {
+      "node": "Next",
+      "count": 1,
+      "equals": [
+        {
+          "text": "line one\nline two",
+          "next": true
+        }
+      ]
+    }
+  ]
+}

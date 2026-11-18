@@ -1,0 +1,51 @@
+{
+  "id": "n2f_660_success_continue",
+  "name": "success_continue",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "source",
+      "name": "Source",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "jsCode": "if ($json.shouldThrow) throw new Error(\"fixture failure\");\nreturn [{ json: { text: `line one\nline two` } }];"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "next",
+      "name": "Next",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, next: true } }));"
+      }
+    }
+  ],
+  "connections": {
+    "Source": {
+      "main": [
+        [
+          {
+            "node": "Next",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "versionId": "66000000-0000-4000-8000-000000000003"
+}

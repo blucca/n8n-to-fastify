@@ -1,0 +1,431 @@
+{
+  "schemaVersion": 1,
+  "measuredOn": "2026-11-18",
+  "source": {
+    "repository": "rogeriomaciel/n8n-to-fastify",
+    "issue": 33,
+    "pr": 35,
+    "contributor": "nicolas-geysse",
+    "base": "d6b4bb37cfb53c18c2c177ece12165726eeea272",
+    "prHead": "c7d667164487a29c18547d8bc1bdaae5e75f97f2"
+  },
+  "environment": {
+    "n8n": "1.123.5",
+    "nativeNode": "v22.23.5",
+    "compilerBun": "1.4.3",
+    "platform": "Linux x64",
+    "n8nCheck": "0.1.9"
+  },
+  "scope": {
+    "nativeInputBoundary": "Manual Trigger and Seed inject the same two-row input; Source and Next match the compiler node objects",
+    "comparison": "business JSON rows",
+    "compilerModes": {
+      "baseline": "default",
+      "pr35": "--strict"
+    }
+  },
+  "originalCodeErrorTests": {
+    "passed": 3,
+    "total": 3,
+    "expectations": 10
+  },
+  "oneLineIndependentOracleTest": {
+    "failed": 1,
+    "filteredOut": 2,
+    "expectations": 5,
+    "exitCode": 1
+  },
+  "initialOracle": {
+    "baselineMatches": 1,
+    "pr35Matches": 2,
+    "nativeMatches": 3,
+    "total": 4,
+    "retainedExpected": "cases/manifest.json",
+    "nativeMismatch": "throw_continue error text adds [line 1]"
+  },
+  "literalControls": {
+    "nativeMatched": 2,
+    "baselineMatched": 0,
+    "pr35Matched": 0,
+    "total": 2,
+    "expected": "line one\nline two",
+    "compiled": "line one\n    line two"
+  },
+  "native": {
+    "n8n": "1.123.5",
+    "node": "v22.23.5",
+    "cases": [
+      {
+        "id": "throw_continue",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "error": "fixture failure",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "error": "fixture failure [line 1]",
+                "next": true
+              }
+            }
+          ],
+          "source": [
+            {
+              "json": {
+                "error": "fixture failure [line 1]"
+              }
+            }
+          ],
+          "nextExecuted": true
+        },
+        "matches": false
+      },
+      {
+        "id": "throw_default",
+        "expected": {
+          "status": "error",
+          "message": "fixture failure"
+        },
+        "actual": {
+          "status": "error",
+          "message": "fixture failure [line 1]",
+          "cliExitCode": 1,
+          "executionFound": true,
+          "nextExecuted": false
+        },
+        "matches": true
+      },
+      {
+        "id": "success_continue",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\nline two",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\nline two",
+                "next": true
+              }
+            }
+          ],
+          "source": [
+            {
+              "json": {
+                "text": "line one\nline two"
+              }
+            }
+          ],
+          "nextExecuted": true
+        },
+        "matches": true
+      },
+      {
+        "id": "success_default",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\nline two",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\nline two",
+                "next": true
+              }
+            }
+          ],
+          "source": [
+            {
+              "json": {
+                "text": "line one\nline two"
+              }
+            }
+          ],
+          "nextExecuted": true
+        },
+        "matches": true
+      }
+    ]
+  },
+  "baseline": {
+    "label": "baseline",
+    "cases": [
+      {
+        "id": "throw_continue",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "error": "fixture failure",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "error",
+          "message": "fixture failure"
+        },
+        "matches": false
+      },
+      {
+        "id": "throw_default",
+        "expected": {
+          "status": "error",
+          "message": "fixture failure"
+        },
+        "actual": {
+          "status": "error",
+          "message": "fixture failure"
+        },
+        "matches": true
+      },
+      {
+        "id": "success_continue",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\nline two",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\n    line two",
+                "next": true
+              }
+            }
+          ],
+          "source": [
+            {
+              "json": {
+                "text": "line one\n    line two"
+              }
+            }
+          ],
+          "nextExecuted": true
+        },
+        "matches": false
+      },
+      {
+        "id": "success_default",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\nline two",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\n    line two",
+                "next": true
+              }
+            }
+          ],
+          "source": [
+            {
+              "json": {
+                "text": "line one\n    line two"
+              }
+            }
+          ],
+          "nextExecuted": true
+        },
+        "matches": false
+      }
+    ]
+  },
+  "pr35": {
+    "label": "pr35",
+    "cases": [
+      {
+        "id": "throw_continue",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "error": "fixture failure",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "error": "fixture failure",
+                "next": true
+              }
+            }
+          ],
+          "source": [
+            {
+              "json": {
+                "error": "fixture failure"
+              }
+            }
+          ],
+          "nextExecuted": true
+        },
+        "matches": true
+      },
+      {
+        "id": "throw_default",
+        "expected": {
+          "status": "error",
+          "message": "fixture failure"
+        },
+        "actual": {
+          "status": "error",
+          "message": "fixture failure"
+        },
+        "matches": true
+      },
+      {
+        "id": "success_continue",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\nline two",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\n    line two",
+                "next": true
+              }
+            }
+          ],
+          "source": [
+            {
+              "json": {
+                "text": "line one\n    line two"
+              }
+            }
+          ],
+          "nextExecuted": true
+        },
+        "matches": false
+      },
+      {
+        "id": "success_default",
+        "expected": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\nline two",
+                "next": true
+              }
+            }
+          ]
+        },
+        "actual": {
+          "status": "success",
+          "items": [
+            {
+              "json": {
+                "text": "line one\n    line two",
+                "next": true
+              }
+            }
+          ],
+          "source": [
+            {
+              "json": {
+                "text": "line one\n    line two"
+              }
+            }
+          ],
+          "nextExecuted": true
+        },
+        "matches": false
+      }
+    ]
+  },
+  "editorReview": {
+    "n8n": "1.123.5",
+    "passed": true,
+    "nodes": 5,
+    "runOrder": [
+      "n8n-check start",
+      "Seed",
+      "Source",
+      "Next",
+      "Check expected output"
+    ],
+    "next": [
+      {
+        "text": "line one\nline two",
+        "next": true
+      }
+    ],
+    "final": [
+      {
+        "status": "passed",
+        "checks": [
+          {
+            "node": "Next",
+            "output": 0,
+            "count": 1,
+            "passed": true
+          }
+        ]
+      }
+    ]
+  }
+}
